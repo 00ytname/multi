@@ -2,10 +2,10 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>멀티뷰 사이트 생성기 (PC/모바일 대응)</title>
+  <title>멀티뷰 사이트 생성기 (모바일 그리드 유지)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    /* 최상위 문서 기준 크기 */
+    /* 기본 뷰포트 및 폰트 설정 */
     html, body {
       width: 100vw;
       height: 100vh;
@@ -16,7 +16,8 @@
       background: #fff;
     }
     h1 {
-      text-align: center; margin-bottom: 15px;
+      text-align: center;
+      margin-bottom: 15px;
     }
     .controls {
       max-width: 900px;
@@ -29,7 +30,8 @@
       transition: opacity 0.3s ease;
     }
     label {
-      white-space: nowrap; font-weight: bold;
+      white-space: nowrap;
+      font-weight: bold;
     }
     input[type=number] {
       width: 60px;
@@ -57,8 +59,7 @@
       padding: 7px 10px;
       font-size: 1rem;
     }
-
-    /* 뷰 분할 컨테이너: 화면 채우기 */
+    /* 멀티뷰 컨테이너 - 뷰포트 기준 크기, grid 레이아웃 */
     #iframeContainer {
       width: 100vw;
       height: 100vh;
@@ -68,14 +69,15 @@
       background: #fff;
       display: grid;
       gap: 0;
-      /* 동적으로 변수로 cols, rows 지정 */
       grid-template-columns: repeat(var(--cols, 1), 1fr);
       grid-template-rows: repeat(var(--rows, 1), 1fr);
       touch-action: none;
+      overflow-x: auto; /* 모바일에서 가로 스크롤 생성 */
+      overflow-y: hidden;
     }
-
     /* 각 분할 영역 */
     .iframe-wrapper {
+      min-width: 100px; /* 너무 좁아지는 걸 방지 */
       width: 100%;
       height: 100%;
       display: flex;
@@ -84,10 +86,9 @@
       overflow: hidden;
       background: #fff;
       position: relative;
-      touch-action: none; /* 드래그 인식용 */
+      touch-action: none;
     }
-
-    /* 이미지 및 iframe은 영역 크기에 맞춤 */
+    /* 이미지 및 iframe 스타일 */
     .iframe-wrapper img, .iframe-wrapper iframe {
       width: 100%;
       height: 100%;
@@ -102,7 +103,6 @@
     .iframe-wrapper img:active {
       cursor: grabbing;
     }
-
     /* 확대/축소 버튼 스타일 */
     .zoom-controls {
       position: absolute;
@@ -136,24 +136,26 @@
     .zoom-controls button:hover {
       background: rgba(255, 255, 255, 1);
     }
-
-    /* 모바일 환경에서는 한 열로 강제 나열 */
+    /* 모바일 미디어쿼리에서 1열 강제 제거함 - 그리드 유지 */
     @media (max-width: 600px) {
       #urlInputs input[type=text] {
-        flex: 1 1 100%; min-width: auto;
+        flex: 1 1 100%;
+        min-width: auto;
       }
       .controls {
         flex-direction: column;
         gap: 15px;
       }
+      /* 주석 처리 혹은 제거로 1열 강제 방지 */
+      /*
       #iframeContainer {
         grid-template-columns: 1fr !important;
-        grid-template-rows: repeat(var(--count, 1), 1fr) !important;
+        grid-template-rows: repeat(var(--count), 1fr) !important;
         height: 100vh;
         overflow: hidden;
       }
+      */
     }
-
     /* 닫기 버튼 */
     #closeBtn {
       position: fixed;
@@ -181,286 +183,273 @@
 </head>
 <body>
   <h1 id="pageTitle">멀티뷰 사이트 생성기</h1>
-
   <div class="controls" id="controlsSection">
     <label for="countInput">몇 분할?</label>
     <input type="number" id="countInput" min="1" max="16" value="4" />
-
     <label for="layoutSelect">레이아웃</label>
     <select id="layoutSelect">
       <option value="grid" selected>바둑판(그리드)</option>
       <option value="horizontal">가로 정렬</option>
       <option value="vertical">세로 정렬</option>
     </select>
-
     <button id="generateBtn">주소 입력창 만들기</button>
   </div>
-
   <form id="urlInputs"></form>
-
   <button id="openBtn" style="display:none; max-width:900px; margin:0 auto 15px; padding:10px 20px; font-size:1.2rem; cursor:pointer;">
     OPEN (멀티뷰 보기)
   </button>
-
   <div id="iframeContainer"></div>
-
   <div id="closeBtn">×</div>
 
-<script>
-  const countInput = document.getElementById("countInput");
-  const layoutSelect = document.getElementById("layoutSelect");
-  const generateBtn = document.getElementById("generateBtn");
-  const urlInputsForm = document.getElementById("urlInputs");
-  const openBtn = document.getElementById("openBtn");
-  const iframeContainer = document.getElementById("iframeContainer");
-  const controlsSection = document.getElementById("controlsSection");
-  const closeBtn = document.getElementById("closeBtn");
-  const pageTitle = document.getElementById("pageTitle");
+  <script>
+    const countInput = document.getElementById("countInput");
+    const layoutSelect = document.getElementById("layoutSelect");
+    const generateBtn = document.getElementById("generateBtn");
+    const urlInputsForm = document.getElementById("urlInputs");
+    const openBtn = document.getElementById("openBtn");
+    const iframeContainer = document.getElementById("iframeContainer");
+    const controlsSection = document.getElementById("controlsSection");
+    const closeBtn = document.getElementById("closeBtn");
+    const pageTitle = document.getElementById("pageTitle");
 
-  let currentUrls = [];
-  let currentLayout = "grid";
+    let currentUrls = [];
+    let currentLayout = "grid";
+    const zoomLevels = [];
+    const translatePositions = [];
 
-  const zoomLevels = [];
-  const translatePositions = [];
-
-  function isImageUrl(url) {
-    return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
-  }
-
-  generateBtn.addEventListener("click", () => {
-    let count = parseInt(countInput.value);
-    if (isNaN(count) || count < 1 || count > 16) {
-      alert("1 ~ 16 사이의 숫자를 입력하세요.");
-      return;
+    function isImageUrl(url) {
+      return /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url);
     }
-    urlInputsForm.innerHTML = "";
-    zoomLevels.length = 0;
-    translatePositions.length = 0;
-    for (let i = 0; i < count; i++) {
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = `사이트 또는 이미지 URL #${i + 1}`;
-      input.name = `url${i}`;
-      input.autocomplete = "off";
-      urlInputsForm.appendChild(input);
-      zoomLevels.push(1);
-      translatePositions.push({ x: 0, y: 0 });
-    }
-    openBtn.style.display = "inline-block";
-  });
 
-  function updateTransform(index) {
-    const wrapper = iframeContainer.children[index];
-    if (!wrapper) return;
-    const img = wrapper.querySelector("img");
-    const iframe = wrapper.querySelector("iframe");
+    generateBtn.addEventListener("click", () => {
+      let count = parseInt(countInput.value);
+      if (isNaN(count) || count < 1 || count > 16) {
+        alert("1 ~ 16 사이의 숫자를 입력하세요.");
+        return;
+      }
+      urlInputsForm.innerHTML = "";
+      zoomLevels.length = 0;
+      translatePositions.length = 0;
+      for (let i = 0; i < count; i++) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = `사이트 또는 이미지 URL #${i + 1}`;
+        input.name = `url${i}`;
+        input.autocomplete = "off";
+        urlInputsForm.appendChild(input);
+        zoomLevels.push(1);
+        translatePositions.push({ x: 0, y: 0 });
+      }
+      openBtn.style.display = "inline-block";
+    });
 
-    if (img) {
-      const pos = translatePositions[index];
-      const scale = zoomLevels[index];
-      img.style.transform = `translate(${pos.x}px, ${pos.y}px) scale(${scale})`;
-    } else if (iframe) {
-      iframe.style.transform = `scale(${zoomLevels[index]})`;
-    }
-  }
+    function updateTransform(index) {
+      const wrapper = iframeContainer.children[index];
+      if (!wrapper) return;
+      const img = wrapper.querySelector("img");
+      const iframe = wrapper.querySelector("iframe");
 
-  function updateZoom(index, delta) {
-    zoomLevels[index] += delta;
-    if (zoomLevels[index] < 0.3) zoomLevels[index] = 0.3;
-    if (zoomLevels[index] > 5) zoomLevels[index] = 5;
-    updateTransform(index);
-  }
-
-  openBtn.addEventListener("click", () => {
-    const inputs = urlInputsForm.querySelectorAll("input[type=text]");
-    let urls = [];
-    for (let input of inputs) {
-      if (input.value.trim() !== "") {
-        urls.push(input.value.trim());
+      if (img) {
+        const pos = translatePositions[index];
+        const scale = zoomLevels[index];
+        img.style.transform = `translate(${pos.x}px, ${pos.y}px) scale(${scale})`;
+      } else if (iframe) {
+        iframe.style.transform = `scale(${zoomLevels[index]})`;
       }
     }
-    if (urls.length === 0) {
-      alert("하나 이상의 URL을 입력하세요.");
-      return;
+
+    function updateZoom(index, delta) {
+      zoomLevels[index] += delta;
+      if (zoomLevels[index] < 0.3) zoomLevels[index] = 0.3;
+      if (zoomLevels[index] > 5) zoomLevels[index] = 5;
+      updateTransform(index);
     }
 
-    currentUrls = urls;
-    currentLayout = layoutSelect.value;
+    openBtn.addEventListener("click", () => {
+      const inputs = urlInputsForm.querySelectorAll("input[type=text]");
+      let urls = [];
+      for (let input of inputs) {
+        if (input.value.trim() !== "") {
+          urls.push(input.value.trim());
+        }
+      }
+      if (urls.length === 0) {
+        alert("하나 이상의 URL을 입력하세요.");
+        return;
+      }
 
-    controlsSection.style.display = "none";
-    urlInputsForm.style.display = "none";
-    openBtn.style.display = "none";
-    pageTitle.style.display = "none";
+      currentUrls = urls;
+      currentLayout = layoutSelect.value;
 
-    const count = urls.length;
-    let cols = 1, rows = 1;
+      controlsSection.style.display = "none";
+      urlInputsForm.style.display = "none";
+      openBtn.style.display = "none";
+      pageTitle.style.display = "none";
 
-    // 레이아웃별 cols, rows 계산
-    if (currentLayout === 'grid') {
-      cols = Math.ceil(Math.sqrt(count));
-      rows = Math.ceil(count / cols);
+      const count = urls.length;
+      let cols = 1, rows = 1;
+
+      if (currentLayout === 'grid') {
+        cols = Math.ceil(Math.sqrt(count));
+        rows = Math.ceil(count / cols);
+      } else if (currentLayout === 'horizontal') {
+        cols = count;
+        rows = 1;
+      } else if (currentLayout === 'vertical') {
+        cols = 1;
+        rows = count;
+      }
+
       iframeContainer.style.display = "grid";
       iframeContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
       iframeContainer.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-    } else if (currentLayout === 'horizontal') {
-      cols = count;
-      rows = 1;
-      iframeContainer.style.display = "grid";
-      iframeContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-      iframeContainer.style.gridTemplateRows = `1fr`;
-    } else if (currentLayout === 'vertical') {
-      cols = 1;
-      rows = count;
-      iframeContainer.style.display = "grid";
-      iframeContainer.style.gridTemplateColumns = "1fr";
-      iframeContainer.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-    }
+      iframeContainer.style.setProperty('--cols', cols);
+      iframeContainer.style.setProperty('--rows', rows);
+      iframeContainer.style.setProperty('--count', count);
 
-    iframeContainer.style.setProperty('--cols', cols);
-    iframeContainer.style.setProperty('--rows', rows);
-    iframeContainer.style.setProperty('--count', count);
+      iframeContainer.innerHTML = "";
+      zoomLevels.length = count;
+      translatePositions.length = count;
 
-    iframeContainer.innerHTML = "";
-    zoomLevels.length = count;
-    translatePositions.length = count;
+      for (let i = 0; i < count; i++) {
+        zoomLevels[i] = 1;
+        translatePositions[i] = { x: 0, y: 0 };
 
-    for (let i = 0; i < count; i++) {
-      zoomLevels[i] = 1;
-      translatePositions[i] = { x: 0, y: 0 };
+        const url = urls[i];
+        const wrapper = document.createElement("div");
+        wrapper.className = "iframe-wrapper";
 
-      const url = urls[i];
-      const wrapper = document.createElement("div");
-      wrapper.className = "iframe-wrapper";
+        if (isImageUrl(url)) {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = `Image #${i + 1}`;
+          img.draggable = false;
+          wrapper.appendChild(img);
 
-      if (isImageUrl(url)) {
-        const img = document.createElement("img");
-        img.src = url;
-        img.alt = `Image #${i + 1}`;
-        img.draggable = false;
-        wrapper.appendChild(img);
+          // 이미지 드래그 이벤트
+          let isDragging = false;
+          let startX, startY;
 
-        // 이미지 드래그 구현
-        let isDragging = false;
-        let startX, startY;
-
-        img.addEventListener("mousedown", (e) => {
-          e.preventDefault();
-          isDragging = true;
-          startX = e.clientX;
-          startY = e.clientY;
-          img.style.cursor = "grabbing";
-        });
-        window.addEventListener("mouseup", () => {
-          if (isDragging) {
-            isDragging = false;
-            img.style.cursor = "grab";
-          }
-        });
-        window.addEventListener("mousemove", (e) => {
-          if (!isDragging) return;
-          e.preventDefault();
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
-          startX = e.clientX;
-          startY = e.clientY;
-          translatePositions[i].x += dx;
-          translatePositions[i].y += dy;
-          updateTransform(i);
-        });
-
-        // 모바일 터치 이벤트
-        img.addEventListener("touchstart", (e) => {
-          if (e.touches.length === 1) {
+          img.addEventListener("mousedown", (e) => {
             e.preventDefault();
             isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            img.style.cursor = "grabbing";
+          });
+
+          window.addEventListener("mouseup", () => {
+            if (isDragging) {
+              isDragging = false;
+              img.style.cursor = "grab";
+            }
+          });
+
+          window.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            startX = e.clientX;
+            startY = e.clientY;
+            translatePositions[i].x += dx;
+            translatePositions[i].y += dy;
+            updateTransform(i);
+          });
+
+          // 모바일 터치 지원
+          img.addEventListener("touchstart", (e) => {
+            if (e.touches.length === 1) {
+              e.preventDefault();
+              isDragging = true;
+              startX = e.touches[0].clientX;
+              startY = e.touches[0].clientY;
+              img.style.cursor = "grabbing";
+            }
+          }, { passive: false });
+          window.addEventListener("touchend", () => {
+            if (isDragging) {
+              isDragging = false;
+              img.style.cursor = "grab";
+            }
+          });
+          window.addEventListener("touchcancel", () => {
+            if (isDragging) {
+              isDragging = false;
+              img.style.cursor = "grab";
+            }
+          });
+          window.addEventListener("touchmove", (e) => {
+            if (!isDragging) return;
+            if (e.touches.length !== 1) return;
+            e.preventDefault();
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
             startX = e.touches[0].clientX;
             startY = e.touches[0].clientY;
-            img.style.cursor = "grabbing";
-          }
-        }, { passive: false });
-        window.addEventListener("touchend", () => {
-          if (isDragging) {
-            isDragging = false;
-            img.style.cursor = "grab";
-          }
-        });
-        window.addEventListener("touchcancel", () => {
-          if (isDragging) {
-            isDragging = false;
-            img.style.cursor = "grab";
-          }
-        });
-        window.addEventListener("touchmove", (e) => {
-          if (!isDragging) return;
-          if (e.touches.length !== 1) return;
-          e.preventDefault();
-          const dx = e.touches[0].clientX - startX;
-          const dy = e.touches[0].clientY - startY;
-          startX = e.touches[0].clientX;
-          startY = e.touches[0].clientY;
-          translatePositions[i].x += dx;
-          translatePositions[i].y += dy;
-          updateTransform(i);
-        }, { passive: false });
+            translatePositions[i].x += dx;
+            translatePositions[i].y += dy;
+            updateTransform(i);
+          }, { passive: false });
 
-      } else {
-        // 유튜브 URL 변환 (간단 지원)
-        let fixedUrl = url;
-        if (/youtu\.?be/.test(url)) {
-          const ytIdMatch = url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/);
-          if (ytIdMatch) {
-            fixedUrl = `https://www.youtube.com/embed/${ytIdMatch[1]}`;
+        } else {
+          // 유튜브 링크 간단 임베드 변환
+          let fixedUrl = url;
+          if (/youtu\.?be/.test(url)) {
+            const ytIdMatch = url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/);
+            if (ytIdMatch) {
+              fixedUrl = `https://www.youtube.com/embed/${ytIdMatch[1]}`;
+            }
           }
+          const iframe = document.createElement("iframe");
+          iframe.src = fixedUrl;
+          iframe.setAttribute("allowfullscreen", "");
+          iframe.setAttribute("loading", "lazy");
+          wrapper.appendChild(iframe);
         }
-        const iframe = document.createElement("iframe");
-        iframe.src = fixedUrl;
-        iframe.setAttribute("allowfullscreen", "");
-        iframe.setAttribute("loading", "lazy");
-        wrapper.appendChild(iframe);
+
+        // 확대/축소 버튼
+        const zoomControls = document.createElement("div");
+        zoomControls.className = "zoom-controls";
+
+        const btnZoomIn = document.createElement("button");
+        btnZoomIn.textContent = "+";
+        btnZoomIn.title = "확대";
+        btnZoomIn.addEventListener("click", e => {
+          e.stopPropagation();
+          e.preventDefault();
+          updateZoom(i, 0.1);
+        });
+
+        const btnZoomOut = document.createElement("button");
+        btnZoomOut.textContent = "−";
+        btnZoomOut.title = "축소";
+        btnZoomOut.addEventListener("click", e => {
+          e.stopPropagation();
+          e.preventDefault();
+          updateZoom(i, -0.1);
+        });
+
+        zoomControls.appendChild(btnZoomIn);
+        zoomControls.appendChild(btnZoomOut);
+        wrapper.appendChild(zoomControls);
+
+        iframeContainer.appendChild(wrapper);
       }
 
-      // 확대/축소 버튼 생성
-      const zoomControls = document.createElement("div");
-      zoomControls.className = "zoom-controls";
+      closeBtn.style.display = "flex";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
 
-      const btnZoomIn = document.createElement("button");
-      btnZoomIn.textContent = "+";
-      btnZoomIn.title = "확대";
-      btnZoomIn.addEventListener("click", e => {
-        e.stopPropagation();
-        e.preventDefault();
-        updateZoom(i, 0.1);
-      });
+    closeBtn.addEventListener("click", () => {
+      controlsSection.style.display = "flex";
+      urlInputsForm.style.display = "flex";
+      openBtn.style.display = "inline-block";
+      pageTitle.style.display = "block";
 
-      const btnZoomOut = document.createElement("button");
-      btnZoomOut.textContent = "−";
-      btnZoomOut.title = "축소";
-      btnZoomOut.addEventListener("click", e => {
-        e.stopPropagation();
-        e.preventDefault();
-        updateZoom(i, -0.1);
-      });
-
-      zoomControls.appendChild(btnZoomIn);
-      zoomControls.appendChild(btnZoomOut);
-      wrapper.appendChild(zoomControls);
-
-      iframeContainer.appendChild(wrapper);
-    }
-
-    closeBtn.style.display = "flex";
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
-
-  closeBtn.addEventListener("click", () => {
-    controlsSection.style.display = "flex";
-    urlInputsForm.style.display = "flex";
-    openBtn.style.display = "inline-block";
-    pageTitle.style.display = "block";
-
-    iframeContainer.innerHTML = "";
-    closeBtn.style.display = "none";
-  });
-</script>
+      iframeContainer.innerHTML = "";
+      closeBtn.style.display = "none";
+    });
+  </script>
 </body>
 </html>
