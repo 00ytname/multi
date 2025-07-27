@@ -2,177 +2,176 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>멀티뷰 사이트 생성기 (이미지 확대/축소 + 드래그 이동)</title>
+  <title>멀티뷰 사이트 생성기 (PC/모바일 대응)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0; padding: 10px;
+    /* 최상위 문서 기준 크기 */
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      margin: 0; padding: 0;
+      overflow: hidden;
       box-sizing: border-box;
-      min-height: 100vh;
+      font-family: Arial, sans-serif;
       background: #fff;
-      display: flex; flex-direction: column;
     }
     h1 {
       text-align: center; margin-bottom: 15px;
     }
     .controls {
-      max-width: 900px; margin: 0 auto 15px;
-      display: flex; flex-wrap: wrap;
-      gap: 10px; align-items: center; justify-content: center;
+      max-width: 900px;
+      margin: 0 auto 15px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
       transition: opacity 0.3s ease;
     }
     label {
       white-space: nowrap; font-weight: bold;
     }
     input[type=number] {
-      width: 60px; padding: 5px; font-size: 1rem; text-align: center;
+      width: 60px;
+      padding: 5px;
+      font-size: 1rem;
+      text-align: center;
     }
     select, button {
-      padding: 6px 12px; font-size: 1rem; cursor: pointer;
+      padding: 6px 12px;
+      font-size: 1rem;
+      cursor: pointer;
     }
     #urlInputs {
-      max-width: 900px; margin: 0 auto 20px;
-      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+      max-width: 900px;
+      margin: 0 auto 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
       transition: opacity 0.3s ease;
     }
     #urlInputs input[type=text] {
-      flex: 1 1 300px; min-width: 220px; padding: 7px 10px; font-size: 1rem;
-    }
-    #iframeContainer {
-      flex-grow: 1;
-      max-width: 100vw; max-height: calc(100vh - 220px);
-      margin: 0 auto; background: #fff;
-      display: flex; flex-wrap: wrap; gap: 0; overflow: hidden;
-      transition: all 0.3s ease;
-    }
-    .iframe-wrapper {
-      position: relative;
-      flex-grow: 1; flex-shrink: 1; flex-basis: 0;
-      overflow: hidden; background: #fff;
-      display: flex; justify-content: center; align-items: center;
-      touch-action: none; /* 터치 드래그 인식용 */
+      flex: 1 1 300px;
+      min-width: 220px;
+      padding: 7px 10px;
+      font-size: 1rem;
     }
 
-    /* iframe 스타일 */
-    .iframe-wrapper iframe {
-      border: none;
+    /* 뷰 분할 컨테이너: 화면 채우기 */
+    #iframeContainer {
+      width: 100vw;
+      height: 100vh;
+      max-width: 100vw;
+      max-height: 100vh;
+      margin: 0 auto;
+      background: #fff;
+      display: grid;
+      gap: 0;
+      /* 동적으로 변수로 cols, rows 지정 */
+      grid-template-columns: repeat(var(--cols, 1), 1fr);
+      grid-template-rows: repeat(var(--rows, 1), 1fr);
+      touch-action: none;
+    }
+
+    /* 각 분할 영역 */
+    .iframe-wrapper {
       width: 100%;
       height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+      background: #fff;
+      position: relative;
+      touch-action: none; /* 드래그 인식용 */
     }
 
-    /* 이미지 스타일 */
-    .iframe-wrapper img {
+    /* 이미지 및 iframe은 영역 크기에 맞춤 */
+    .iframe-wrapper img, .iframe-wrapper iframe {
+      width: 100%;
+      height: 100%;
       max-width: 100%;
       max-height: 100%;
-      object-fit: contain; /* 크기에 맞춰 비율 유지 */
+      object-fit: contain;
+      display: block;
       user-select: none;
       cursor: grab;
       transition: transform 0.1s ease;
-      /* transform은 JS에서 관리 */
     }
     .iframe-wrapper img:active {
       cursor: grabbing;
     }
 
-    /* 확대/축소 버튼 */
+    /* 확대/축소 버튼 스타일 */
     .zoom-controls {
       position: absolute;
-      top: 5px; right: 5px;
-      display: flex; gap: 4px;
+      top: 5px;
+      right: 5px;
+      display: flex;
+      gap: 4px;
       background: rgba(0, 0, 0, 0.3);
-      border-radius: 4px; padding: 2px;
-      user-select: none; z-index: 10;
+      border-radius: 4px;
+      padding: 2px;
+      user-select: none;
+      z-index: 10;
     }
     .zoom-controls button {
       background: rgba(255, 255, 255, 0.8);
-      border: none; border-radius: 3px;
-      width: 24px; height: 24px;
-      font-weight: bold; cursor: pointer;
-      line-height: 1; padding: 0;
-      display: flex; justify-content: center; align-items: center;
-      font-size: 18px; color: #333;
+      border: none;
+      border-radius: 3px;
+      width: 24px;
+      height: 24px;
+      font-weight: bold;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 18px;
+      color: #333;
       transition: background 0.2s ease;
     }
     .zoom-controls button:hover {
       background: rgba(255, 255, 255, 1);
     }
 
-    /* 레이아웃별 스타일 */
-    .layout-vertical {
-      flex-direction: column; align-items: stretch;
-    }
-    .layout-vertical .iframe-wrapper {
-      width: 100%;
-      height: calc((100% - (var(--count) - 1) * 0px) / var(--count));
-      flex-basis: auto; flex-grow: 0; flex-shrink: 0;
-    }
-    .layout-horizontal {
-      flex-direction: row; align-items: stretch;
-    }
-    .layout-horizontal .iframe-wrapper {
-      height: 100%;
-      width: calc((100% - (var(--count) - 1) * 0px) / var(--count));
-      flex-basis: auto; flex-grow: 0; flex-shrink: 0;
-    }
-    .layout-grid {
-      display: grid; gap: 0; background: #fff;
-    }
-    .layout-grid .iframe-wrapper {
-      width: 100% !important;
-      height: 100% !important;
-      flex: none !important;
-      background: #fff;
-    }
-
-    /* 반응형 모바일 */
+    /* 모바일 환경에서는 한 열로 강제 나열 */
     @media (max-width: 600px) {
       #urlInputs input[type=text] {
         flex: 1 1 100%; min-width: auto;
       }
       .controls {
-        flex-direction: column; gap: 15px;
+        flex-direction: column;
+        gap: 15px;
       }
       #iframeContainer {
-        height: auto !important;
-        max-height: none !important;
-        overflow-y: auto !important;
-        min-height: 0 !important;
-        display: block !important;
         grid-template-columns: 1fr !important;
-        grid-template-rows: repeat(auto-fit, minmax(120px, 1fr)) !important;
-      }
-      .iframe-wrapper {
-        width: 100% !important;
-        height: auto !important;
-        min-height: 160px;
-        max-height: 70vw !important;
-        overflow: auto !important;
-        display: flex !important;
-        justify-content: center;
-        align-items: center;
-      }
-      #iframeContainer.layout-grid {
-        grid-template-columns: 1fr !important;
-        grid-template-rows: repeat(auto-fit, minmax(160px, 1fr)) !important;
-      }
-      #iframeContainer.layout-horizontal .iframe-wrapper,
-      #iframeContainer.layout-vertical .iframe-wrapper {
-        width: 100% !important;
-        height: auto !important;
-        flex-basis: auto !important;
-        flex-grow: 0 !important;
-        flex-shrink: 0 !important;
+        grid-template-rows: repeat(var(--count, 1), 1fr) !important;
+        height: 100vh;
+        overflow: hidden;
       }
     }
 
+    /* 닫기 버튼 */
     #closeBtn {
-      position: fixed; bottom: 10px; right: 10px;
-      width: 28px; height: 28px;
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
       background: rgba(0,0,0,0.6);
-      color: #fff; font-weight: bold; font-size: 20px;
-      line-height: 28px; text-align: center;
-      border-radius: 50%; cursor: pointer; user-select: none;
-      z-index: 9999; transition: background 0.3s ease;
+      color: #fff;
+      font-weight: bold;
+      font-size: 20px;
+      line-height: 28px;
+      text-align: center;
+      border-radius: 50%;
+      cursor: pointer;
+      user-select: none;
+      z-index: 9999;
+      transition: background 0.3s ease;
       display: none;
     }
     #closeBtn:hover {
@@ -181,7 +180,7 @@
   </style>
 </head>
 <body>
-  <h1 id="pageTitle">멀티뷰 사이트 생성기 (이미지 확대/축소 + 드래그 이동)</h1>
+  <h1 id="pageTitle">멀티뷰 사이트 생성기</h1>
 
   <div class="controls" id="controlsSection">
     <label for="countInput">몇 분할?</label>
@@ -189,9 +188,9 @@
 
     <label for="layoutSelect">레이아웃</label>
     <select id="layoutSelect">
-      <option value="vertical">가로 정렬</option>
-      <option value="horizontal">세로 정렬</option>
       <option value="grid" selected>바둑판(그리드)</option>
+      <option value="horizontal">가로 정렬</option>
+      <option value="vertical">세로 정렬</option>
     </select>
 
     <button id="generateBtn">주소 입력창 만들기</button>
@@ -199,11 +198,11 @@
 
   <form id="urlInputs"></form>
 
-  <button id="openBtn" style="display:none; max-width:900px; margin:0 auto 15px; padding: 10px 20px; font-size:1.2rem; cursor:pointer;">
+  <button id="openBtn" style="display:none; max-width:900px; margin:0 auto 15px; padding:10px 20px; font-size:1.2rem; cursor:pointer;">
     OPEN (멀티뷰 보기)
   </button>
 
-  <div id="iframeContainer" style="max-width:900px; margin-bottom: 30px;"></div>
+  <div id="iframeContainer"></div>
 
   <div id="closeBtn">×</div>
 
@@ -293,40 +292,39 @@
     openBtn.style.display = "none";
     pageTitle.style.display = "none";
 
-    iframeContainer.style.maxWidth = "100vw";
-    iframeContainer.style.margin = "0";
-    iframeContainer.style.maxHeight = "100vh";
-    iframeContainer.style.height = "100vh";
+    const count = urls.length;
+    let cols = 1, rows = 1;
 
-    iframeContainer.style.setProperty("--count", urls.length);
-    iframeContainer.className = "";
-
-    if (currentLayout === "vertical") {
-      iframeContainer.classList.add("layout-vertical");
-      iframeContainer.style.removeProperty("grid-template-columns");
-      iframeContainer.style.removeProperty("grid-template-rows");
-      iframeContainer.style.display = "flex";
-    } else if (currentLayout === "horizontal") {
-      iframeContainer.classList.add("layout-horizontal");
-      iframeContainer.style.removeProperty("grid-template-columns");
-      iframeContainer.style.removeProperty("grid-template-rows");
-      iframeContainer.style.display = "flex";
-    } else {
-      iframeContainer.classList.add("layout-grid");
-      const count = currentUrls.length;
-      const cols = Math.ceil(Math.sqrt(count));
-      const rows = Math.ceil(count / cols);
+    // 레이아웃별 cols, rows 계산
+    if (currentLayout === 'grid') {
+      cols = Math.ceil(Math.sqrt(count));
+      rows = Math.ceil(count / cols);
       iframeContainer.style.display = "grid";
       iframeContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
       iframeContainer.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-      iframeContainer.style.gap = "0";
+    } else if (currentLayout === 'horizontal') {
+      cols = count;
+      rows = 1;
+      iframeContainer.style.display = "grid";
+      iframeContainer.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      iframeContainer.style.gridTemplateRows = `1fr`;
+    } else if (currentLayout === 'vertical') {
+      cols = 1;
+      rows = count;
+      iframeContainer.style.display = "grid";
+      iframeContainer.style.gridTemplateColumns = "1fr";
+      iframeContainer.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
     }
 
-    iframeContainer.innerHTML = "";
-    zoomLevels.length = urls.length;
-    translatePositions.length = urls.length;
+    iframeContainer.style.setProperty('--cols', cols);
+    iframeContainer.style.setProperty('--rows', rows);
+    iframeContainer.style.setProperty('--count', count);
 
-    for (let i = 0; i < urls.length; i++) {
+    iframeContainer.innerHTML = "";
+    zoomLevels.length = count;
+    translatePositions.length = count;
+
+    for (let i = 0; i < count; i++) {
       zoomLevels[i] = 1;
       translatePositions[i] = { x: 0, y: 0 };
 
@@ -341,6 +339,7 @@
         img.draggable = false;
         wrapper.appendChild(img);
 
+        // 이미지 드래그 구현
         let isDragging = false;
         let startX, startY;
 
@@ -369,7 +368,7 @@
           updateTransform(i);
         });
 
-        // 모바일 터치 지원
+        // 모바일 터치 이벤트
         img.addEventListener("touchstart", (e) => {
           if (e.touches.length === 1) {
             e.preventDefault();
@@ -405,6 +404,7 @@
         }, { passive: false });
 
       } else {
+        // 유튜브 URL 변환 (간단 지원)
         let fixedUrl = url;
         if (/youtu\.?be/.test(url)) {
           const ytIdMatch = url.match(/(?:youtu\.be\/|v=)([a-zA-Z0-9_-]{11})/);
@@ -419,6 +419,7 @@
         wrapper.appendChild(iframe);
       }
 
+      // 확대/축소 버튼 생성
       const zoomControls = document.createElement("div");
       zoomControls.className = "zoom-controls";
 
@@ -456,11 +457,6 @@
     urlInputsForm.style.display = "flex";
     openBtn.style.display = "inline-block";
     pageTitle.style.display = "block";
-
-    iframeContainer.style.maxWidth = "900px";
-    iframeContainer.style.margin = "0 auto 30px";
-    iframeContainer.style.maxHeight = "calc(100vh - 220px)";
-    iframeContainer.style.height = "auto";
 
     iframeContainer.innerHTML = "";
     closeBtn.style.display = "none";
