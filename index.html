@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>Multi Media Viewer Pro (Fixed)</title>
+  <title>멀티 미디어 뷰어 프로</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
@@ -16,32 +16,28 @@
     #urlInputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; max-width: 1200px; margin: 0 auto; }
     #urlInputs input { background: #252525; color: #fff; width: 90%; border: 1px solid #333; }
 
+    /* 뷰어 영역 */
     #viewerSection { display: none; height: 100vh; flex-direction: column; }
     #masterBar { background: #000; padding: 10px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; z-index: 100; border-bottom: 1px solid #333; }
     #iframeContainer { flex-grow: 1; display: grid; gap: 4px; padding: 4px; background: #000; overflow: hidden; }
 
+    /* 타일 및 래퍼 */
     .video-tile { position: relative; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-    
     .media-wrapper { 
-        position: absolute; 
-        width: 1280px; height: 720px; 
-        transform-origin: center center; 
-        display: flex; align-items: center; justify-content: center;
-        pointer-events: none; /* 클릭 간섭 방지 */
+        position: absolute; width: 1280px; height: 720px; 
+        transform-origin: center center; display: flex; align-items: center; justify-content: center; 
     }
-    .media-wrapper iframe, .media-wrapper video, .media-wrapper img { 
-        width: 100%; height: 100%; border: none; object-fit: contain;
-        pointer-events: auto; /* 내부 요소는 클릭 가능 */
-    }
+    .media-wrapper iframe, .media-wrapper video, .media-wrapper img { width: 100%; height: 100%; border: none; object-fit: contain; }
     .portrait { width: 450px !important; height: 800px !important; }
 
+    /* 개별 컨트롤 */
     .individual-controls {
       position: absolute; top: 10px; left: 10px; z-index: 50;
       display: flex; gap: 4px; opacity: 0; transition: 0.2s;
       background: rgba(0,0,0,0.7); padding: 5px; border-radius: 8px;
     }
     .video-tile:hover .individual-controls { opacity: 1; }
-    .zoom-btn { width: 34px; height: 34px; border-radius: 4px; background: #fff; color: #000; font-weight: bold; cursor: pointer; border: none; }
+    .zoom-btn { width: 34px; height: 34px; border-radius: 4px; background: #fff; color: #000; font-weight: bold; cursor: pointer; border: none; font-size: 16px; }
 
     .btn { cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px; }
     .btn-red { background: var(--accent); color: white; }
@@ -53,14 +49,14 @@
 <body>
 
   <div id="setupSection">
-    <h1>🎬 Multi Media Viewer Pro</h1>
+    <h1>🎬 Multi Media Viewer</h1>
     <div class="controls">
       가로 <input type="number" id="colsInput" class="grid-input" value="2"> x 
       세로 <input type="number" id="rowsInput" class="grid-input" value="2">
       <button class="btn btn-gray" onclick="createInputs()">입력창 만들기</button>
     </div>
     <div id="urlInputs"></div>
-    <button id="startBtn" class="btn btn-red" style="display:none; width: 250px; margin-top:20px;">뷰어 시작</button>
+    <button id="startBtn" class="btn btn-red" style="display:none; width: 250px; margin-top:20px;">멀티뷰 시작</button>
   </div>
 
   <div id="viewerSection">
@@ -69,8 +65,8 @@
       <button class="btn btn-gray" onclick="allPause()">⏸ 전체 정지</button>
       <button class="btn btn-gray" onclick="allMute(true)">🔇 전체 뮤트</button>
       <button class="btn btn-gray" onclick="allMute(false)">🔊 뮤트 해제</button>
-      <button class="btn btn-blue" onclick="fitAll('max')">📱 세로영상 꽉채우기</button>
-      <button class="btn btn-green" onclick="goBackToEdit()">✏️ 주소 편집</button>
+      <button class="btn btn-blue" onclick="fitAll('max')">📱 세로영상 최적화</button>
+      <button class="btn btn-green" onclick="goBack()">✏️ 주소 편집 (뒤로가기)</button>
       <button class="btn btn-gray" onclick="exitViewer()">❌ 전체 종료</button>
     </div>
     <div id="iframeContainer"></div>
@@ -82,6 +78,7 @@
     let zoomStates = []; 
     let isPortrait = [];
 
+    // 입력창 생성
     function createInputs() {
       const total = parseInt(document.getElementById('colsInput').value) * parseInt(document.getElementById('rowsInput').value);
       const container = document.getElementById('urlInputs');
@@ -90,12 +87,21 @@
       document.getElementById('startBtn').style.display = 'inline-block';
     }
 
+    // 유튜브 ID 추출
     function getYTId(url) {
-      const reg = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
-      const match = url.match(reg);
+      const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/);
       return (match && match[2].length === 11) ? match[2] : null;
     }
 
+    // 미디어 타입 판별
+    function getMediaType(url) {
+      if (getYTId(url)) return 'youtube';
+      if (/\.(mp4|webm|ogg|mov)$/i.test(url)) return 'video';
+      if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) return 'image';
+      return 'unknown';
+    }
+
+    // 뷰어 시작
     document.getElementById('startBtn').onclick = function() {
       const inputs = document.querySelectorAll('.url-in');
       const cols = parseInt(document.getElementById('colsInput').value);
@@ -112,12 +118,9 @@
       container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
       urls.forEach((url, index) => {
+        const type = getMediaType(url);
         const tile = document.createElement('div');
         tile.className = 'video-tile';
-        
-        const videoId = getYTId(url);
-        const isImg = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url);
-        const isVid = /\.(mp4|webm|ogg|mov)$/i.test(url);
         
         isPortrait[index] = url.includes('shorts') || url.includes('portrait'); 
         zoomStates[index] = 1;
@@ -135,26 +138,26 @@
         wrapper.id = `wrapper-${index}`;
         wrapper.className = `media-wrapper ${isPortrait[index] ? 'portrait' : ''}`;
         
-        if (videoId) {
+        if (type === 'youtube') {
           const playerDiv = document.createElement('div');
           playerDiv.id = `player-${index}`;
           wrapper.appendChild(playerDiv);
-          // 유튜브 플레이어 생성
-          new YT.Player(`player-${index}`, {
-            height: '100%', width: '100%', videoId: videoId,
-            playerVars: { 
-                'autoplay': 0, 'mute': 1, 'controls': 1, 'vq': 'hd1080', 
-                'enablejsapi': 1, 'origin': window.location.origin 
-            },
-            events: { 'onReady': (e) => { players[index] = e.target; fitToTile(index); } }
-          });
-        } else if (isVid) {
+          const videoId = getYTId(url);
+          // API가 로드된 후 플레이어 생성
+          setTimeout(() => {
+            new YT.Player(`player-${index}`, {
+              height: '100%', width: '100%', videoId: videoId,
+              playerVars: { 'autoplay': 0, 'mute': 1, 'controls': 1, 'vq': 'hd1080', 'enablejsapi': 1 },
+              events: { 'onReady': (e) => { players[index] = e.target; fitToTile(index); } }
+            });
+          }, 100);
+        } else if (type === 'video') {
           const video = document.createElement('video');
           video.src = url; video.controls = true; video.muted = true; video.loop = true;
           wrapper.appendChild(video);
           nativeVideos.push(video);
           setTimeout(() => fitToTile(index), 100);
-        } else if (isImg) {
+        } else if (type === 'image') {
           const img = document.createElement('img');
           img.src = url;
           wrapper.appendChild(img);
@@ -166,36 +169,37 @@
         container.appendChild(tile);
       });
 
-      window.addEventListener('resize', fitAll);
       new Sortable(container, { animation: 150, onEnd: () => fitAll() });
+      window.addEventListener('resize', fitAll);
     };
 
-    function goBackToEdit() {
+    // 주소 유지하며 뒤로가기
+    function goBack() {
       document.getElementById('setupSection').style.display = 'block';
       document.getElementById('viewerSection').style.display = 'none';
       players = []; nativeVideos = [];
     }
 
+    // 영상 크기 맞춤 로직
     function fitToTile(index, mode = 'min') {
-      const tiles = document.querySelectorAll('.video-tile');
-      const tile = tiles[index];
+      const tile = document.querySelectorAll('.video-tile')[index];
       const wrapper = document.getElementById(`wrapper-${index}`);
       if (!tile || !wrapper) return;
-      
+
       const tW = tile.clientWidth; const tH = tile.clientHeight;
       const isPort = wrapper.classList.contains('portrait');
       const baseW = isPort ? 450 : 1280; const baseH = isPort ? 800 : 720;
-      
+
       const scaleW = tW / baseW; const scaleH = tH / baseH;
       const baseScale = (mode === 'max') ? Math.max(scaleW, scaleH) : Math.min(scaleW, scaleH);
+
       wrapper.style.transform = `scale(${baseScale * zoomStates[index]})`;
     }
 
-    function fitAll(mode = 'min') {
+    function fitAll(mode = 'min') { 
         const wrappers = document.querySelectorAll('.media-wrapper');
         wrappers.forEach((_, i) => fitToTile(i, mode));
     }
-
     function adjustZoom(index, delta) { zoomStates[index] += delta; fitToTile(index); }
     function resetZoom(index) { zoomStates[index] = 1; fitToTile(index); }
     function allPlay() { 
@@ -210,7 +214,7 @@
         players.forEach(p => p && (isMute ? p.mute() : p.unMute()));
         nativeVideos.forEach(v => v.muted = isMute);
     }
-    function exitViewer() { if(confirm("초기화?")) location.reload(); }
+    function exitViewer() { if(confirm("초기화면으로 이동하시겠습니까? (주소 삭제)")) location.reload(); }
   </script>
 </body>
 </html>
