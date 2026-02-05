@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>멀티 미디어 뷰어 (YouTube, MP4, IMG)</title>
+  <title>Multi Media Viewer Pro (Fixed)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
@@ -27,9 +27,11 @@
         width: 1280px; height: 720px; 
         transform-origin: center center; 
         display: flex; align-items: center; justify-content: center;
+        pointer-events: none; /* 클릭 간섭 방지 */
     }
     .media-wrapper iframe, .media-wrapper video, .media-wrapper img { 
         width: 100%; height: 100%; border: none; object-fit: contain;
+        pointer-events: auto; /* 내부 요소는 클릭 가능 */
     }
     .portrait { width: 450px !important; height: 800px !important; }
 
@@ -44,13 +46,14 @@
     .btn { cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px; }
     .btn-red { background: var(--accent); color: white; }
     .btn-gray { background: #333; color: white; }
-    .btn-green { background: #28a745; color: white; } /* 편집 버튼 색상 */
+    .btn-blue { background: #0055ff; color: white; }
+    .btn-green { background: #28a745; color: white; }
   </style>
 </head>
 <body>
 
   <div id="setupSection">
-    <h1>🎬 Multi Media Viewer</h1>
+    <h1>🎬 Multi Media Viewer Pro</h1>
     <div class="controls">
       가로 <input type="number" id="colsInput" class="grid-input" value="2"> x 
       세로 <input type="number" id="rowsInput" class="grid-input" value="2">
@@ -66,8 +69,9 @@
       <button class="btn btn-gray" onclick="allPause()">⏸ 전체 정지</button>
       <button class="btn btn-gray" onclick="allMute(true)">🔇 전체 뮤트</button>
       <button class="btn btn-gray" onclick="allMute(false)">🔊 뮤트 해제</button>
-      <button class="btn btn-green" onclick="goBackToEdit()">✏️ 주소 편집 (뒤로가기)</button>
-      <button class="btn btn-gray" onclick="exitViewer()">❌ 전체 종료 (초기화)</button>
+      <button class="btn btn-blue" onclick="fitAll('max')">📱 세로영상 꽉채우기</button>
+      <button class="btn btn-green" onclick="goBackToEdit()">✏️ 주소 편집</button>
+      <button class="btn btn-gray" onclick="exitViewer()">❌ 전체 종료</button>
     </div>
     <div id="iframeContainer"></div>
   </div>
@@ -82,19 +86,13 @@
       const total = parseInt(document.getElementById('colsInput').value) * parseInt(document.getElementById('rowsInput').value);
       const container = document.getElementById('urlInputs');
       container.innerHTML = '';
-      for(let i=0; i<total; i++) container.innerHTML += `<input type="text" class="url-in" placeholder="미디어 URL #${i+1}">`;
+      for(let i=0; i<total; i++) container.innerHTML += `<input type="text" class="url-in" placeholder="유튜브, MP4, 이미지 URL #${i+1}">`;
       document.getElementById('startBtn').style.display = 'inline-block';
     }
 
-    function getMediaType(url) {
-      if (/youtube\.com|youtu\.be|shorts/.test(url)) return 'youtube';
-      if (/\.(mp4|webm|ogg|mov)$/i.test(url)) return 'video';
-      if (/\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url)) return 'image';
-      return 'youtube';
-    }
-
     function getYTId(url) {
-      const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/);
+      const reg = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+      const match = url.match(reg);
       return (match && match[2].length === 11) ? match[2] : null;
     }
 
@@ -114,9 +112,12 @@
       container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
       urls.forEach((url, index) => {
-        const type = getMediaType(url);
         const tile = document.createElement('div');
         tile.className = 'video-tile';
+        
+        const videoId = getYTId(url);
+        const isImg = /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(url);
+        const isVid = /\.(mp4|webm|ogg|mov)$/i.test(url);
         
         isPortrait[index] = url.includes('shorts') || url.includes('portrait'); 
         zoomStates[index] = 1;
@@ -134,25 +135,26 @@
         wrapper.id = `wrapper-${index}`;
         wrapper.className = `media-wrapper ${isPortrait[index] ? 'portrait' : ''}`;
         
-        if (type === 'youtube') {
+        if (videoId) {
           const playerDiv = document.createElement('div');
           playerDiv.id = `player-${index}`;
           wrapper.appendChild(playerDiv);
-          const videoId = getYTId(url);
-          if(videoId) {
-            new YT.Player(`player-${index}`, {
-              height: '100%', width: '100%', videoId: videoId,
-              playerVars: { 'autoplay': 0, 'mute': 1, 'controls': 1, 'vq': 'hd1080' },
-              events: { 'onReady': (e) => { players[index] = e.target; fitToTile(index); } }
-            });
-          }
-        } else if (type === 'video') {
+          // 유튜브 플레이어 생성
+          new YT.Player(`player-${index}`, {
+            height: '100%', width: '100%', videoId: videoId,
+            playerVars: { 
+                'autoplay': 0, 'mute': 1, 'controls': 1, 'vq': 'hd1080', 
+                'enablejsapi': 1, 'origin': window.location.origin 
+            },
+            events: { 'onReady': (e) => { players[index] = e.target; fitToTile(index); } }
+          });
+        } else if (isVid) {
           const video = document.createElement('video');
           video.src = url; video.controls = true; video.muted = true; video.loop = true;
           wrapper.appendChild(video);
           nativeVideos.push(video);
           setTimeout(() => fitToTile(index), 100);
-        } else if (type === 'image') {
+        } else if (isImg) {
           const img = document.createElement('img');
           img.src = url;
           wrapper.appendChild(img);
@@ -164,34 +166,36 @@
         container.appendChild(tile);
       });
 
-      window.addEventListener('resize', () => fitAll());
+      window.addEventListener('resize', fitAll);
       new Sortable(container, { animation: 150, onEnd: () => fitAll() });
     };
 
-    // 주소 편집 모드로 돌아가는 함수 (데이터 유지)
     function goBackToEdit() {
-      if(!confirm("주소를 수정하시겠습니까? 현재 재생 상태는 초기화됩니다.")) return;
       document.getElementById('setupSection').style.display = 'block';
       document.getElementById('viewerSection').style.display = 'none';
-      // 뷰어 내부 내용만 삭제 (입력창은 유지)
-      document.getElementById('iframeContainer').innerHTML = '';
-      players = [];
-      nativeVideos = [];
+      players = []; nativeVideos = [];
     }
 
     function fitToTile(index, mode = 'min') {
-      const tile = document.querySelectorAll('.video-tile')[index];
+      const tiles = document.querySelectorAll('.video-tile');
+      const tile = tiles[index];
       const wrapper = document.getElementById(`wrapper-${index}`);
       if (!tile || !wrapper) return;
+      
       const tW = tile.clientWidth; const tH = tile.clientHeight;
       const isPort = wrapper.classList.contains('portrait');
       const baseW = isPort ? 450 : 1280; const baseH = isPort ? 800 : 720;
+      
       const scaleW = tW / baseW; const scaleH = tH / baseH;
       const baseScale = (mode === 'max') ? Math.max(scaleW, scaleH) : Math.min(scaleW, scaleH);
       wrapper.style.transform = `scale(${baseScale * zoomStates[index]})`;
     }
 
-    function fitAll() { players.forEach((_, i) => fitToTile(i)); }
+    function fitAll(mode = 'min') {
+        const wrappers = document.querySelectorAll('.media-wrapper');
+        wrappers.forEach((_, i) => fitToTile(i, mode));
+    }
+
     function adjustZoom(index, delta) { zoomStates[index] += delta; fitToTile(index); }
     function resetZoom(index) { zoomStates[index] = 1; fitToTile(index); }
     function allPlay() { 
@@ -206,7 +210,7 @@
         players.forEach(p => p && (isMute ? p.mute() : p.unMute()));
         nativeVideos.forEach(v => v.muted = isMute);
     }
-    function exitViewer() { if(confirm("모든 설정을 초기화하고 종료하시겠습니까?")) location.reload(); }
+    function exitViewer() { if(confirm("초기화?")) location.reload(); }
   </script>
 </body>
 </html>
