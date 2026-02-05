@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>유튜브 멀티뷰 프로</title>
+  <title>유튜브 멀티뷰 프로 (그리드 & 확대)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
@@ -15,40 +15,60 @@
     }
     body {
       margin: 0; padding: 0; background: var(--bg); color: var(--text);
-      font-family: sans-serif; overflow-x: hidden;
+      font-family: sans-serif; overflow: hidden;
     }
-    #setupSection { padding: 20px; text-align: center; }
-    .controls { margin-bottom: 20px; }
+    #setupSection { padding: 20px; text-align: center; height: 100vh; overflow-y: auto; box-sizing: border-box; }
+    .controls { margin-bottom: 20px; background: var(--card); padding: 20px; border-radius: 10px; display: inline-block; }
     input, button { padding: 10px; border-radius: 5px; border: none; margin: 5px; }
+    .grid-input { width: 50px; text-align: center; }
     #urlInputs { 
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
-      gap: 10px; max-width: 1000px; margin: 0 auto; 
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+      gap: 10px; max-width: 1200px; margin: 0 auto; 
     }
-    #urlInputs input { background: #333; color: #fff; }
+    #urlInputs input { background: #333; color: #fff; width: 90%; }
 
-    /* 멀티뷰 모드 */
+    /* 뷰어 영역 */
     #viewerSection { display: none; height: 100vh; flex-direction: column; }
     #masterBar { 
-      background: rgba(0,0,0,0.8); padding: 10px; 
-      display: flex; justify-content: center; gap: 10px;
-      position: sticky; top: 0; z-index: 100;
+      background: rgba(0,0,0,0.9); padding: 10px; 
+      display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+      z-index: 100; border-bottom: 1px solid #333;
     }
     #iframeContainer {
       flex-grow: 1; display: grid; gap: 5px; padding: 5px;
-      background: #000;
+      background: #000; overflow: hidden;
     }
-    .video-tile {
-      position: relative; background: #222; cursor: move;
-      width: 100%; height: 100%; min-height: 200px;
-    }
-    .video-tile iframe { width: 100%; height: 100%; border: none; pointer-events: auto; }
-    /* 드래그 중인 타일 스타일 */
-    .sortable-ghost { opacity: 0.4; border: 2px dashed var(--accent); }
 
+    /* 영상 타일 및 개별 확대 설정 */
+    .video-tile {
+      position: relative; background: #222; border: 1px solid #333;
+      overflow: hidden; /* 확대 시 영역 밖으로 나가지 않게 함 */
+      display: flex; align-items: center; justify-content: center;
+    }
+    .video-tile iframe { 
+      width: 100%; height: 100%; border: none; 
+      transition: transform 0.2s ease-in-out;
+      transform-origin: center center;
+    }
+
+    /* 개별 영상 컨트롤러 (Hover 시 노출) */
+    .individual-controls {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      display: flex; gap: 5px; opacity: 0; transition: opacity 0.2s;
+      background: rgba(0,0,0,0.6); padding: 5px; border-radius: 5px;
+    }
+    .video-tile:hover .individual-controls { opacity: 1; }
+    
+    .zoom-btn {
+      width: 30px; height: 30px; border-radius: 4px;
+      background: #fff; color: #000; font-weight: bold;
+      cursor: pointer; border: none; display: flex; align-items: center; justify-content: center;
+    }
+
+    .sortable-ghost { opacity: 0.3; background: var(--accent); }
     .btn { cursor: pointer; font-weight: bold; transition: 0.2s; }
     .btn-red { background: var(--accent); color: white; }
     .btn-gray { background: #444; color: white; }
-    .btn:hover { opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -56,17 +76,19 @@
   <div id="setupSection">
     <h1>🎬 YouTube MultiView Pro</h1>
     <div class="controls">
-      <input type="number" id="countInput" min="1" max="16" value="4">
+      <strong>레이아웃:</strong>
+      가로 <input type="number" id="colsInput" class="grid-input" value="2" min="1"> x 
+      세로 <input type="number" id="rowsInput" class="grid-input" value="2" min="1">
       <button class="btn btn-gray" onclick="createInputs()">입력창 만들기</button>
     </div>
     <div id="urlInputs"></div>
-    <button id="startBtn" class="btn btn-red" style="display:none; width: 200px; margin-top:20px;">멀티뷰 시작</button>
+    <button id="startBtn" class="btn btn-red" style="display:none; width: 240px; margin-top:20px; font-size: 1.1rem;">멀티뷰 시작</button>
   </div>
 
   <div id="viewerSection">
     <div id="masterBar">
       <button class="btn btn-red" onclick="allPlay()">▶ 동시 재생</button>
-      <button class="btn btn-gray" onclick="allPause()">⏸ 동시 일시정지</button>
+      <button class="btn btn-gray" onclick="allPause()">⏸ 일시정지</button>
       <button class="btn btn-gray" onclick="allMute(true)">🔇 전체 뮤트</button>
       <button class="btn btn-gray" onclick="allMute(false)">🔊 뮤트 해제</button>
       <button class="btn btn-gray" onclick="exitViewer()">❌ 나가기</button>
@@ -76,83 +98,116 @@
 
   <script>
     let players = [];
+    let zoomStates = []; // 각 영상의 확대 배율 저장
 
-    // 1. 입력창 생성
+    // 1. 가로x세로 기반 입력창 생성
     function createInputs() {
-      const count = document.getElementById('countInput').value;
+      const cols = parseInt(document.getElementById('colsInput').value);
+      const rows = parseInt(document.getElementById('rowsInput').value);
+      const total = cols * rows;
+      
       const container = document.getElementById('urlInputs');
       container.innerHTML = '';
-      for(let i=0; i<count; i++) {
+      for(let i=0; i<total; i++) {
         container.innerHTML += `<input type="text" class="url-in" placeholder="유튜브 URL #${i+1}">`;
       }
       document.getElementById('startBtn').style.display = 'inline-block';
     }
 
-    // 2. 유튜브 ID 추출
+    // 유튜브 ID 추출
     function getYTId(url) {
       const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
       const match = url.match(regExp);
       return (match && match[2].length === 11) ? match[2] : null;
     }
 
-    // 3. 멀티뷰 시작
+    // 2. 멀티뷰 시작
     document.getElementById('startBtn').onclick = function() {
       const inputs = document.querySelectorAll('.url-in');
-      const urls = Array.from(inputs).map(i => i.value).filter(v => getYTId(v));
+      const cols = document.getElementById('colsInput').value;
+      const rows = document.getElementById('rowsInput').value;
       
-      if(urls.length === 0) return alert("올바른 유튜브 주소를 입력해주세요.");
-
+      const urls = Array.from(inputs).map(i => i.value);
+      
       document.getElementById('setupSection').style.display = 'none';
       document.getElementById('viewerSection').style.display = 'flex';
 
       const container = document.getElementById('iframeContainer');
       container.innerHTML = '';
       players = [];
+      zoomStates = new Array(urls.length).fill(1); // 초기 배율 1배
 
-      // 그리드 계산
-      const cols = Math.ceil(Math.sqrt(urls.length));
       container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      container.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
 
       urls.forEach((url, index) => {
         const videoId = getYTId(url);
         const tile = document.createElement('div');
         tile.className = 'video-tile';
-        tile.id = `player-container-${index}`;
         
+        // 개별 컨트롤러 추가
+        const indControls = document.createElement('div');
+        indControls.className = 'individual-controls';
+        indControls.innerHTML = `
+          <button class="zoom-btn" onclick="adjustZoom(${index}, 0.1)" title="확대">+</button>
+          <button class="zoom-btn" onclick="adjustZoom(${index}, -0.1)" title="축소">-</button>
+          <button class="zoom-btn" onclick="resetZoom(${index})" title="초기화">⟲</button>
+        `;
+
         const playerDiv = document.createElement('div');
         playerDiv.id = `player-${index}`;
+        playerDiv.style.width = "100%";
+        playerDiv.style.height = "100%";
+        
+        tile.appendChild(indControls);
         tile.appendChild(playerDiv);
         container.appendChild(tile);
 
-        // API 플레이어 생성
-        const player = new YT.Player(`player-${index}`, {
-          height: '100%',
-          width: '100%',
-          videoId: videoId,
-          playerVars: { 'autoplay': 1, 'mute': 1, 'rel': 0 },
-          events: {
-            'onReady': (event) => { players.push(event.target); }
-          }
-        });
+        if(videoId) {
+          new YT.Player(`player-${index}`, {
+            height: '100%',
+            width: '100%',
+            videoId: videoId,
+            playerVars: { 'autoplay': 1, 'mute': 1, 'rel': 0, 'controls': 1 },
+            events: {
+              'onReady': (event) => { players[index] = event.target; }
+            }
+          });
+        } else {
+          playerDiv.innerHTML = `<div style="color:#555; padding:20px;">URL 없음</div>`;
+        }
       });
 
-      // 드래그 앤 드롭 활성화
-      new Sortable(container, {
-        animation: 150,
-        ghostClass: 'sortable-ghost'
-      });
+      new Sortable(container, { animation: 150, ghostClass: 'sortable-ghost' });
     };
 
-    // 4. 마스터 컨트롤 함수들
-    function allPlay() { players.forEach(p => p.playVideo()); }
-    function allPause() { players.forEach(p => p.pauseVideo()); }
+    // 3. 개별 확대/축소 기능
+    function adjustZoom(index, delta) {
+      zoomStates[index] = Math.max(0.5, Math.min(3, zoomStates[index] + delta));
+      applyZoom(index);
+    }
+
+    function resetZoom(index) {
+      zoomStates[index] = 1;
+      applyZoom(index);
+    }
+
+    function applyZoom(index) {
+      const iframe = document.querySelector(`#player-${index}`);
+      if(iframe) {
+        iframe.style.transform = `scale(${zoomStates[index]})`;
+      }
+    }
+
+    // 4. 마스터 컨트롤
+    function allPlay() { players.forEach(p => p && p.playVideo()); }
+    function allPause() { players.forEach(p => p && p.pauseVideo()); }
     function allMute(isMute) {
-      players.forEach(p => isMute ? p.mute() : p.unMute());
+      players.forEach(p => { if(p) isMute ? p.mute() : p.unMute(); });
     }
 
     function exitViewer() {
-      if(!confirm("멀티뷰를 종료할까요?")) return;
-      location.reload(); // 간단하게 초기화
+      if(confirm("초기 화면으로 돌아갈까요?")) location.reload();
     }
   </script>
 </body>
